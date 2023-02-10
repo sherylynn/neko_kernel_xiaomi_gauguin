@@ -27,26 +27,26 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
-#define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
-#define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
-#define EMERGENCY_DLOAD_MAGIC3    0x77777777
-#define EMMC_DLOAD_TYPE		0x2
+#define EMERGENCY_DLOAD_MAGIC1 0x322A4F99
+#define EMERGENCY_DLOAD_MAGIC2 0xC67E4350
+#define EMERGENCY_DLOAD_MAGIC3 0x77777777
+#define EMMC_DLOAD_TYPE 0x2
 
-#define SCM_IO_DISABLE_PMIC_ARBITER	1
-#define SCM_IO_DEASSERT_PS_HOLD		2
-#define SCM_WDOG_DEBUG_BOOT_PART	0x9
-#define SCM_DLOAD_FULLDUMP		0X10
-#define SCM_EDLOAD_MODE			0X01
-#define SCM_DLOAD_CMD			0x10
-#define SCM_DLOAD_MINIDUMP		0X20
-#define SCM_DLOAD_BOTHDUMPS	(SCM_DLOAD_MINIDUMP | SCM_DLOAD_FULLDUMP)
+#define SCM_IO_DISABLE_PMIC_ARBITER 1
+#define SCM_IO_DEASSERT_PS_HOLD 2
+#define SCM_WDOG_DEBUG_BOOT_PART 0x9
+#define SCM_DLOAD_FULLDUMP 0X10
+#define SCM_EDLOAD_MODE 0X01
+#define SCM_DLOAD_CMD 0x10
+#define SCM_DLOAD_MINIDUMP 0X40
+#define SCM_DLOAD_BOTHDUMPS (SCM_DLOAD_MINIDUMP | SCM_DLOAD_FULLDUMP)
 
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
 #define IMEM_DL_TYPE_PROP "qcom,msm-imem-dload-type"
 
 #define KASLR_OFFSET_PROP "qcom,msm-imem-kaslr_offset"
-#define KASLR_OFFSET_BIT_MASK	0x00000000FFFFFFFF
+#define KASLR_OFFSET_BIT_MASK 0x00000000FFFFFFFF
 
 static int restart_mode;
 static void *restart_reason, *dload_type_addr;
@@ -66,7 +66,7 @@ static int download_mode = 1;
 static struct kobject dload_kobj;
 
 static int in_panic;
-static int dload_type = SCM_DLOAD_FULLDUMP;
+static int dload_type = SCM_DLOAD_BOTHDUMPS;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
@@ -76,17 +76,16 @@ static bool force_warm_reboot;
 
 /* interface for exporting attributes */
 struct reset_attribute {
-	struct attribute        attr;
+	struct attribute attr;
 	ssize_t (*show)(struct kobject *kobj, struct attribute *attr,
 			char *buf);
 	size_t (*store)(struct kobject *kobj, struct attribute *attr,
 			const char *buf, size_t count);
 };
-#define to_reset_attr(_attr) \
-	container_of(_attr, struct reset_attribute, attr)
-#define RESET_ATTR(_name, _mode, _show, _store)	\
-	static struct reset_attribute reset_attr_##_name = \
-			__ATTR(_name, _mode, _show, _store)
+#define to_reset_attr(_attr) container_of(_attr, struct reset_attribute, attr)
+#define RESET_ATTR(_name, _mode, _show, _store)                                \
+	static struct reset_attribute reset_attr_##_name =                     \
+		__ATTR(_name, _mode, _show, _store)
 
 /* sysfs related globals */
 static ssize_t show_emmc_dload(struct kobject *kobj, struct attribute *attr,
@@ -103,44 +102,42 @@ static size_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
 RESET_ATTR(dload_mode, 0644, show_dload_mode, store_dload_mode);
 #endif /* CONFIG_QCOM_MINIDUMP */
 
-static struct attribute *reset_attrs[] = {
-	&reset_attr_emmc_dload.attr,
+static struct attribute *reset_attrs[] = { &reset_attr_emmc_dload.attr,
 #ifdef CONFIG_QCOM_MINIDUMP
-	&reset_attr_dload_mode.attr,
+					   &reset_attr_dload_mode.attr,
 #endif
-	NULL
-};
+					   NULL };
 
 static struct attribute_group reset_attr_group = {
 	.attrs = reset_attrs,
 };
 
 static int dload_set(const char *val, const struct kernel_param *kp);
-module_param_call(download_mode, dload_set, param_get_int,
-			&download_mode, 0644);
+module_param_call(download_mode, dload_set, param_get_int, &download_mode,
+		  0644);
 
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
-			       char *buf);
+			 char *buf);
 static ssize_t attr_store(struct kobject *kobj, struct attribute *attr,
-			       const char *buf, size_t count);
+			  const char *buf, size_t count);
 static const struct sysfs_ops reset_sysfs_ops = {
-	.show	= attr_show,
-	.store	= attr_store,
+	.show = attr_show,
+	.store = attr_store,
 };
 
 static struct kobj_type reset_ktype = {
-	.sysfs_ops	= &reset_sysfs_ops,
+	.sysfs_ops = &reset_sysfs_ops,
 };
 
-static int panic_prep_restart(struct notifier_block *this,
-			      unsigned long event, void *ptr)
+static int panic_prep_restart(struct notifier_block *this, unsigned long event,
+			      void *ptr)
 {
 	in_panic = 1;
 	return NOTIFY_DONE;
 }
 
 static struct notifier_block panic_blk = {
-	.notifier_call	= panic_prep_restart,
+	.notifier_call = panic_prep_restart,
 };
 
 int scm_set_dload_mode(int arg1, int arg2)
@@ -169,7 +166,7 @@ static void set_dload_mode(int on)
 	if (dload_mode_addr) {
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
-		       dload_mode_addr + sizeof(unsigned int));
+			     dload_mode_addr + sizeof(unsigned int));
 		/* Make sure the download cookie is updated */
 		mb();
 	}
@@ -191,14 +188,12 @@ static void enable_emergency_dload_mode(void)
 	int ret;
 
 	if (emergency_dload_mode_addr) {
-		__raw_writel(EMERGENCY_DLOAD_MAGIC1,
-				emergency_dload_mode_addr);
+		__raw_writel(EMERGENCY_DLOAD_MAGIC1, emergency_dload_mode_addr);
 		__raw_writel(EMERGENCY_DLOAD_MAGIC2,
-				emergency_dload_mode_addr +
-				sizeof(unsigned int));
+			     emergency_dload_mode_addr + sizeof(unsigned int));
 		__raw_writel(EMERGENCY_DLOAD_MAGIC3,
-				emergency_dload_mode_addr +
-				(2 * sizeof(unsigned int)));
+			     emergency_dload_mode_addr +
+				     (2 * sizeof(unsigned int)));
 
 		/* Need disable the pmic wdt, then the emergency dload mode
 		 * will not auto reset.
@@ -267,10 +262,11 @@ static void store_kaslr_offset(void)
 	if (kaslr_imem_addr) {
 		__raw_writel(0xdead4ead, kaslr_imem_addr);
 		__raw_writel(KASLR_OFFSET_BIT_MASK &
-		(kimage_vaddr - KIMAGE_VADDR), kaslr_imem_addr + 4);
+				     (kimage_vaddr - KIMAGE_VADDR),
+			     kaslr_imem_addr + 4);
 		__raw_writel(KASLR_OFFSET_BIT_MASK &
-			((kimage_vaddr - KIMAGE_VADDR) >> 32),
-			kaslr_imem_addr + 8);
+				     ((kimage_vaddr - KIMAGE_VADDR) >> 32),
+			     kaslr_imem_addr + 8);
 		iounmap(kaslr_imem_addr);
 	}
 }
@@ -299,8 +295,8 @@ static void setup_dload_mode_support(void)
 	if (!dload_type_addr)
 		return;
 
-	ret = kobject_init_and_add(&dload_kobj, &reset_ktype,
-			kernel_kobj, "%s", "dload");
+	ret = kobject_init_and_add(&dload_kobj, &reset_ktype, kernel_kobj, "%s",
+				   "dload");
 	if (ret) {
 		pr_err("%s:Error in creation kobject_add\n", __func__);
 		kobject_put(&dload_kobj);
@@ -315,7 +311,7 @@ static void setup_dload_mode_support(void)
 }
 
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
-				char *buf)
+			 char *buf)
 {
 	struct reset_attribute *reset_attr = to_reset_attr(attr);
 	ssize_t ret = -EIO;
@@ -327,7 +323,7 @@ static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
 }
 
 static ssize_t attr_store(struct kobject *kobj, struct attribute *attr,
-				const char *buf, size_t count)
+			  const char *buf, size_t count)
 {
 	struct reset_attribute *reset_attr = to_reset_attr(attr);
 	ssize_t ret = -EIO;
@@ -339,7 +335,7 @@ static ssize_t attr_store(struct kobject *kobj, struct attribute *attr,
 }
 
 static ssize_t show_emmc_dload(struct kobject *kobj, struct attribute *attr,
-				char *buf)
+			       char *buf)
 {
 	uint32_t read_val, show_val;
 
@@ -356,7 +352,7 @@ static ssize_t show_emmc_dload(struct kobject *kobj, struct attribute *attr,
 }
 
 static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
-				const char *buf, size_t count)
+			       const char *buf, size_t count)
 {
 	uint32_t enabled;
 	int ret;
@@ -383,15 +379,17 @@ static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
 static DEFINE_MUTEX(tcsr_lock);
 
 static ssize_t show_dload_mode(struct kobject *kobj, struct attribute *attr,
-				char *buf)
+			       char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "DLOAD dump type: %s\n",
-		(dload_type == SCM_DLOAD_BOTHDUMPS) ? "both" :
-		((dload_type == SCM_DLOAD_MINIDUMP) ? "mini" : "full"));
+			 (dload_type == SCM_DLOAD_BOTHDUMPS) ?
+				 "both" :
+				 ((dload_type == SCM_DLOAD_MINIDUMP) ? "mini" :
+								       "full"));
 }
 
 static size_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
-				const char *buf, size_t count)
+			       const char *buf, size_t count)
 {
 	if (sysfs_streq(buf, "full")) {
 		dload_type = SCM_DLOAD_FULLDUMP;
@@ -432,8 +430,8 @@ static void scm_disable_sdi(void)
 	};
 
 	/* Needed to bypass debug image on some chips */
-	ret = scm_call2_atomic(SCM_SIP_FNID(SCM_SVC_BOOT,
-			  SCM_WDOG_DEBUG_BOOT_PART), &desc);
+	ret = scm_call2_atomic(
+		SCM_SIP_FNID(SCM_SVC_BOOT, SCM_WDOG_DEBUG_BOOT_PART), &desc);
 	if (ret)
 		pr_err("Failed to disable secure wdog debug: %d\n", ret);
 }
@@ -460,7 +458,8 @@ static void halt_spmi_pmic_arbiter(void)
 	if (scm_pmic_arbiter_disable_supported) {
 		pr_crit("Calling SCM to disable SPMI PMIC arbiter\n");
 		scm_call2_atomic(SCM_SIP_FNID(SCM_SVC_PWR,
-				SCM_IO_DISABLE_PMIC_ARBITER), &desc);
+					      SCM_IO_DISABLE_PMIC_ARBITER),
+				 &desc);
 	}
 }
 
@@ -473,17 +472,16 @@ static void msm_restart_prepare(const char *cmd)
 	 */
 
 	set_dload_mode(download_mode &&
-			(in_panic || restart_mode == RESTART_DLOAD));
+		       (in_panic || restart_mode == RESTART_DLOAD));
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
 		if (get_dload_mode() ||
-			((cmd != NULL && cmd[0] != '\0') &&
-			!strcmp(cmd, "edl")))
+		    ((cmd != NULL && cmd[0] != '\0') && !strcmp(cmd, "edl")))
 			need_warm_reset = true;
 	} else {
-		need_warm_reset = (get_dload_mode() ||
-				(cmd != NULL && cmd[0] != '\0'));
+		need_warm_reset =
+			(get_dload_mode() || (cmd != NULL && cmd[0] != '\0'));
 	}
 
 	if (force_warm_reboot)
@@ -495,53 +493,56 @@ static void msm_restart_prepare(const char *cmd)
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 
-	if (cmd != NULL) {
-		if (!strncmp(cmd, "bootloader", 10)) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_BOOTLOADER);
-			__raw_writel(0x77665500, restart_reason);
-		} else if (!strncmp(cmd, "recovery", 8)) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_RECOVERY);
-			__raw_writel(0x77665502, restart_reason);
-		} else if (!strcmp(cmd, "rtc")) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_RTC);
-			__raw_writel(0x77665503, restart_reason);
-		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_DMVERITY_CORRUPTED);
-			__raw_writel(0x77665508, restart_reason);
-		} else if (!strcmp(cmd, "dm-verity enforcing")) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_DMVERITY_ENFORCE);
-			__raw_writel(0x77665509, restart_reason);
-		} else if (!strcmp(cmd, "keys clear")) {
-			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_KEYS_CLEAR);
-			__raw_writel(0x7766550a, restart_reason);
-		} else if (!strncmp(cmd, "oem-", 4)) {
-			unsigned long code;
-			int ret;
+	if (in_panic) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_PANIC);
+	} else if (cmd != NULL) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_BOOTLOADER);
+		__raw_writel(0x77665500, restart_reason);
+	} else if (!strncmp(cmd, "recovery", 8)) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_RECOVERY);
+		__raw_writel(0x77665502, restart_reason);
+	} else if (!strcmp(cmd, "rtc")) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_RTC);
+		__raw_writel(0x77665503, restart_reason);
+	} else if (!strcmp(cmd, "dm-verity device corrupted")) {
+		qpnp_pon_set_restart_reason(
+			PON_RESTART_REASON_DMVERITY_CORRUPTED);
+		__raw_writel(0x77665508, restart_reason);
+	} else if (!strcmp(cmd, "dm-verity enforcing")) {
+		qpnp_pon_set_restart_reason(
+			PON_RESTART_REASON_DMVERITY_ENFORCE);
+		__raw_writel(0x77665509, restart_reason);
+	} else if (!strcmp(cmd, "keys clear")) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_KEYS_CLEAR);
+		__raw_writel(0x7766550a, restart_reason);
+	} else if (!strncmp(cmd, "oem-", 4)) {
+		unsigned long code;
+		int ret;
 
-			ret = kstrtoul(cmd + 4, 16, &code);
-			if (!ret)
-				__raw_writel(0x6f656d00 | (code & 0xff),
-					     restart_reason);
-		} else if (!strncmp(cmd, "edl", 3)) {
+		ret = kstrtoul(cmd + 4, 16, &code);
+		if (!ret)
+			__raw_writel(0x6f656d00 | (code & 0xff),
+				     restart_reason);
+	} else if (!strncmp(cmd, "edl", 3)) {
+		if (0)
 			enable_emergency_dload_mode();
-		} else {
-			__raw_writel(0x77665501, restart_reason);
-		}
+	} else {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_NORMAL);
+		__raw_writel(0x77665501, restart_reason);
 	}
+}
+else
+{
+	qpnp_pon_set_restart_reason(PON_RESTART_REASON_NORMAL);
+	__raw_writel(0x77665501, restart_reason);
+}
 
-	flush_cache_all();
+flush_cache_all();
 
-	/*outer_flush_all is not supported by 64bit kernel*/
+/*outer_flush_all is not supported by 64bit kernel*/
 #ifndef CONFIG_ARM64
-	outer_flush_all();
+outer_flush_all();
 #endif
-
 }
 
 /*
@@ -561,7 +562,8 @@ static void deassert_ps_hold(void)
 	if (scm_deassert_ps_hold_supported) {
 		/* This call will be available on ARMv8 only */
 		scm_call2_atomic(SCM_SIP_FNID(SCM_SVC_PWR,
-				 SCM_IO_DEASSERT_PS_HOLD), &desc);
+					      SCM_IO_DEASSERT_PS_HOLD),
+				 &desc);
 	}
 
 	/* Fall-through to the direct write in case the scm_call "returns" */
@@ -613,7 +615,7 @@ static int msm_restart_probe(struct platform_device *pdev)
 	setup_dload_mode_support();
 
 	np = of_find_compatible_node(NULL, NULL,
-				"qcom,msm-imem-restart_reason");
+				     "qcom,msm-imem-restart_reason");
 	if (!np) {
 		pr_err("unable to find DT imem restart reason node\n");
 	} else {
@@ -648,8 +650,8 @@ static int msm_restart_probe(struct platform_device *pdev)
 	if (!download_mode)
 		scm_disable_sdi();
 
-	force_warm_reboot = of_property_read_bool(dev->of_node,
-						"qcom,force-warm-reboot");
+	force_warm_reboot =
+		of_property_read_bool(dev->of_node, "qcom,force-warm-reboot");
 
 	return 0;
 
@@ -659,7 +661,9 @@ err_restart_reason:
 }
 
 static const struct of_device_id of_msm_restart_match[] = {
-	{ .compatible = "qcom,pshold", },
+	{
+		.compatible = "qcom,pshold",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, of_msm_restart_match);
